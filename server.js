@@ -1,6 +1,6 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const path = require("path");
-const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -9,32 +9,31 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// API route for feedback
-app.post("/feedback", (req, res) => {
-  const feedback = req.body;
+// 🔹 Connect to MongoDB
+const mongoURI = process.env.MONGO_URI || "your-mongodb-connection-string-here";
+mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 
-  // Save feedback into a file
-  const feedbackPath = path.join(__dirname, "feedback.json");
+// 🔹 Define Schema
+const feedbackSchema = new mongoose.Schema({
+  name: String,
+  feedback: String,
+  time: { type: Date, default: Date.now }
+});
+const Feedback = mongoose.model("Feedback", feedbackSchema);
 
-  // Read existing feedbacks
-  let feedbacks = [];
-  if (fs.existsSync(feedbackPath)) {
-    const data = fs.readFileSync(feedbackPath);
-    feedbacks = JSON.parse(data);
+// 🔹 API route for feedback
+app.post("/feedback", async (req, res) => {
+  try {
+    const newFeedback = new Feedback(req.body);
+    await newFeedback.save();
+    console.log("📩 Feedback saved:", req.body);
+    res.json({ message: "✅ Feedback saved to MongoDB!" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "❌ Error saving feedback" });
   }
-
-  // Add new feedback
-  feedbacks.push({
-    ...feedback,
-    time: new Date().toISOString()
-  });
-
-  // Save back to file
-  fs.writeFileSync(feedbackPath, JSON.stringify(feedbacks, null, 2));
-
-  console.log("📩 Feedback saved:", feedback);
-
-  res.json({ message: "✅ Feedback saved successfully!", data: feedback });
 });
 
 // Start server
