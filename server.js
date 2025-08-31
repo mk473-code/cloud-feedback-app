@@ -1,53 +1,43 @@
-// server.js
-import express from "express";
-import bodyParser from "body-parser";
-import pkg from "pg";
+const express = require("express");
+const bodyParser = require("body-parser");
+const { Pool } = require("pg");
 
-const { Pool } = pkg;
 const app = express();
 const port = process.env.PORT || 5000;
 
-// PostgreSQL pool
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // required for Render
-});
-
+// Middleware
 app.use(bodyParser.json());
 
-// Create table if not exists
-pool.query(`
-  CREATE TABLE IF NOT EXISTS feedback (
-    id SERIAL PRIMARY KEY,
-    name TEXT,
-    message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-`);
+// PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
-// Save feedback
+// API route to save feedback
 app.post("/feedback", async (req, res) => {
-  const { name, message } = req.body;
   try {
+    const { name, message } = req.body;
     await pool.query("INSERT INTO feedback (name, message) VALUES ($1, $2)", [name, message]);
-    res.json({ success: true, message: "Feedback saved!" });
+    res.status(201).json({ success: true, message: "Feedback saved!" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Database error" });
+    res.status(500).json({ error: "Failed to save feedback" });
   }
 });
 
-// Get all feedback
+// API route to fetch feedback
 app.get("/feedback", async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM feedback ORDER BY created_at DESC");
+    const result = await pool.query("SELECT * FROM feedback ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Database error" });
+    res.status(500).json({ error: "Failed to fetch feedback" });
   }
 });
 
+// Start server
 app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+  console.log(`✅ Server running on port ${port}`);
 });
