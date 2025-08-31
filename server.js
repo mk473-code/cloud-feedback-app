@@ -1,18 +1,40 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public"))); // serve frontend files
+app.use(express.static(path.join(__dirname, "public")));
 
 // API route for feedback
 app.post("/feedback", (req, res) => {
   const feedback = req.body;
-  console.log("📩 Feedback received:", feedback);
-  res.json({ message: "Thank you for your feedback!", data: feedback });
+
+  // Save feedback into a file
+  const feedbackPath = path.join(__dirname, "feedback.json");
+
+  // Read existing feedbacks
+  let feedbacks = [];
+  if (fs.existsSync(feedbackPath)) {
+    const data = fs.readFileSync(feedbackPath);
+    feedbacks = JSON.parse(data);
+  }
+
+  // Add new feedback
+  feedbacks.push({
+    ...feedback,
+    time: new Date().toISOString()
+  });
+
+  // Save back to file
+  fs.writeFileSync(feedbackPath, JSON.stringify(feedbacks, null, 2));
+
+  console.log("📩 Feedback saved:", feedback);
+
+  res.json({ message: "✅ Feedback saved successfully!", data: feedback });
 });
 
 // Start server
