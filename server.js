@@ -1,42 +1,53 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const path = require("path");
+// server.js
+import express from "express";
+import bodyParser from "body-parser";
+import pkg from "pg";
 
+const { Pool } = pkg;
 const app = express();
-const PORT = process.env.PORT || 5000;
+const port = process.env.PORT || 5000;
 
-// Middleware
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
-
-// 🔹 Connect to MongoDB
-const mongoURI = process.env.MONGO_URI || "your-mongodb-connection-string-here";
-mongoose.connect(mongoURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
-
-// 🔹 Define Schema
-const feedbackSchema = new mongoose.Schema({
-  name: String,
-  feedback: String,
-  time: { type: Date, default: Date.now }
+// PostgreSQL pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false } // required for Render
 });
-const Feedback = mongoose.model("Feedback", feedbackSchema);
 
-// 🔹 API route for feedback
+app.use(bodyParser.json());
+
+// Create table if not exists
+pool.query(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Save feedback
 app.post("/feedback", async (req, res) => {
+  const { name, message } = req.body;
   try {
-    const newFeedback = new Feedback(req.body);
-    await newFeedback.save();
-    console.log("📩 Feedback saved:", req.body);
-    res.json({ message: "✅ Feedback saved to MongoDB!" });
+    await pool.query("INSERT INTO feedback (name, message) VALUES ($1, $2)", [name, message]);
+    res.json({ success: true, message: "Feedback saved!" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "❌ Error saving feedback" });
+    res.status(500).json({ success: false, error: "Database error" });
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+// Get all feedback
+app.get("/feedback", async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM feedback ORDER BY created_at DESC");
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: "Database error" });
+  }
+});
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
